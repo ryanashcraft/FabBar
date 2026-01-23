@@ -15,6 +15,15 @@ enum Constants {
     /// Spacing between the segmented control and FAB.
     static let fabSpacing: CGFloat = 8
 
+    // MARK: - Layout Padding
+
+    /// Horizontal padding for FabBar positioning.
+    static let horizontalPadding: CGFloat = 16
+
+    /// Bottom padding for FabBar positioning.
+    /// Provides clearance above the home indicator.
+    static let bottomPadding: CGFloat = 21
+
     /// Padding inside the glass container around the segmented control.
     static let contentPadding: CGFloat = 2
 

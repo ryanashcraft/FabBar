@@ -7,55 +7,34 @@ import SwiftUI
 ///
 /// ## Usage
 ///
+/// The recommended way to use FabBar is with the `.fabBar()` modifier:
+///
 /// ```swift
-/// enum AppTab: Hashable {
-///     case home, explore, profile
-/// }
-///
-/// struct ContentView: View {
-///     @State private var selectedTab: AppTab = .home
-///
-///     var body: some View {
-///         TabView(selection: $selectedTab) {
-///             Tab(value: AppTab.home) {
-///                 HomeView()
-///                     .toolbarVisibility(.hidden, for: .tabBar)
-///             }
-///             // more tabs...
-///         }
-///         .safeAreaBar(edge: .bottom) {
-///             FabBar(
-///                 selection: $selectedTab,
-///                 items: [
-///                     FabBarItem(tab: .home, title: "Home", systemImage: "house.fill"),
-///                     FabBarItem(tab: .explore, title: "Explore", systemImage: "compass"),
-///                     FabBarItem(tab: .profile, title: "Profile", systemImage: "person.fill"),
-///                 ],
-///                 action: FabAction(
-///                     systemImage: "plus",
-///                     accessibilityLabel: "Add Item"
-///                 ) {
-///                     // Handle tap
-///                 }
-///             )
-///             .padding(.horizontal, 16)
-///             .padding(.bottom, 21)
-///         }
-///         .ignoresSafeArea(.container, edges: .bottom)
+/// TabView(selection: $selectedTab) {
+///     Tab(value: .home) {
+///         HomeView()
+///             .fabBarSafeAreaPadding()
+///             .toolbarVisibility(.hidden, for: .tabBar)
 ///     }
+///     // more tabs...
 /// }
+/// .fabBar(
+///     selection: $selectedTab,
+///     items: [
+///         FabBarItem(tab: .home, title: "Home", systemImage: "house.fill"),
+///         FabBarItem(tab: .explore, title: "Explore", systemImage: "compass"),
+///         FabBarItem(tab: .profile, title: "Profile", systemImage: "person.fill"),
+///     ],
+///     action: FabAction(systemImage: "plus", accessibilityLabel: "Add Item") {
+///         // Handle tap
+///     }
+/// )
 /// ```
+///
+/// For more control over positioning, you can use the `FabBar` view directly.
 
 @available(iOS 26.0, *)
 public struct FabBar<Tab: Hashable>: View {
-    /// Height of the tab bar.
-    ///
-    /// Use this to calculate bottom content margins for scroll views:
-    /// ```swift
-    /// let bottomMargin = FabBar.height + yourBottomPadding
-    /// ```
-    public static var height: CGFloat { Constants.barHeight }
-
     /// The currently selected tab.
     @Binding public var selection: Tab
 

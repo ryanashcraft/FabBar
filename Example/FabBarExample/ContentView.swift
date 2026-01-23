@@ -7,11 +7,6 @@ enum AppTab: Hashable {
     case profile
 }
 
-private enum TabBarLayout {
-    static let horizontalPadding: CGFloat = 16
-    static let bottomPadding: CGFloat = 21
-}
-
 @available(iOS 26.0, *)
 struct ContentView: View {
     @State private var selectedTab: AppTab = .home
@@ -21,45 +16,43 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             Tab(value: AppTab.home) {
                 TabContentView(title: "Home", systemImage: "house.fill")
+                    .fabBarSafeAreaPadding()
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
 
             Tab(value: AppTab.explore) {
                 TabContentView(title: "Explore", systemImage: "map.fill")
+                    .fabBarSafeAreaPadding()
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
 
             Tab(value: AppTab.profile) {
                 TabContentView(title: "Profile", systemImage: "person.fill")
+                    .fabBarSafeAreaPadding()
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
         }
-        .safeAreaBar(edge: .bottom) {
-            FabBar(
-                selection: $selectedTab,
-                items: [
-                    FabBarItem(tab: AppTab.home, title: "Home", systemImage: "house.fill", onReselect: {
-                        print("Reselected: home")
-                    }),
-                    FabBarItem(tab: AppTab.explore, title: "Explore", systemImage: "map.fill", onReselect: {
-                        print("Reselected: explore")
-                    }),
-                    FabBarItem(tab: AppTab.profile, title: "Profile", systemImage: "person.fill", onReselect: {
-                        print("Reselected: profile")
-                    }),
-                ],
-                action: FabAction(
-                    systemImage: "plus",
-                    accessibilityLabel: "Add"
-                ) {
-                    showingSheet = true
-                }
-            )
-            .padding(.horizontal, TabBarLayout.horizontalPadding)
-            .padding(.bottom, TabBarLayout.bottomPadding)
-        }
+        .fabBar(
+            selection: $selectedTab,
+            items: [
+                FabBarItem(tab: AppTab.home, title: "Home", systemImage: "house.fill", onReselect: {
+                    print("Reselected: home")
+                }),
+                FabBarItem(tab: AppTab.explore, title: "Explore", systemImage: "map.fill", onReselect: {
+                    print("Reselected: explore")
+                }),
+                FabBarItem(tab: AppTab.profile, title: "Profile", systemImage: "person.fill", onReselect: {
+                    print("Reselected: profile")
+                }),
+            ],
+            action: FabAction(
+                systemImage: "plus",
+                accessibilityLabel: "Add"
+            ) {
+                showingSheet = true
+            }
+        )
         .ignoresSafeArea(.keyboard)
-        .ignoresSafeArea(.container, edges: .bottom)
         .sheet(isPresented: $showingSheet) {
             Text("Sheet content")
                 .presentationDetents([.medium])

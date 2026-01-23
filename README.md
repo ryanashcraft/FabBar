@@ -57,41 +57,43 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab(value: AppTab.home) {
+            Tab(value: .home) {
                 HomeView()
+                    .fabBarSafeAreaPadding()
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
-            Tab(value: AppTab.explore) {
+            Tab(value: .explore) {
                 ExploreView()
+                    .fabBarSafeAreaPadding()
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
-            Tab(value: AppTab.profile) {
+            Tab(value: .profile) {
                 ProfileView()
+                    .fabBarSafeAreaPadding()
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
         }
-        .safeAreaBar(edge: .bottom) {
-            FabBar(
-                selection: $selectedTab,
-                items: [
-                    FabBarItem(tab: .home, title: "Home", systemImage: "house.fill"),
-                    FabBarItem(tab: .explore, title: "Explore", systemImage: "compass"),
-                    FabBarItem(tab: .profile, title: "Profile", systemImage: "person.fill"),
-                ],
-                action: FabAction(
-                    systemImage: "plus",
-                    accessibilityLabel: "Add Item"
-                ) {
-                    // Handle FAB tap
-                }
-            )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 21)
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
+        .fabBar(
+            selection: $selectedTab,
+            items: [
+                FabBarItem(tab: .home, title: "Home", systemImage: "house.fill"),
+                FabBarItem(tab: .explore, title: "Explore", systemImage: "compass"),
+                FabBarItem(tab: .profile, title: "Profile", systemImage: "person.fill"),
+            ],
+            action: FabAction(
+                systemImage: "plus",
+                accessibilityLabel: "Add Item"
+            ) {
+                // Handle FAB tap
+            }
+        )
     }
 }
 ```
+
+The `.fabBar()` modifier handles positioning, safe area management, and automatically hides on iPad. Use `.fabBarSafeAreaPadding()` on scrollable content within each tab to ensure content isn't hidden behind the bar.
+
+For more control over positioning, you can use the `FabBar` view directly.
 
 ### Custom Images
 
@@ -121,48 +123,6 @@ FabBarItem(
     }
 )
 ```
-
-### Layout Considerations
-
-FabBar doesn't dictate how you position it in your layout. Here's what you'll typically need to handle:
-
-**1. Hide the native tab bar** on each tab's content:
-
-```swift
-Tab(value: .home) {
-    HomeView()
-        .toolbarVisibility(.hidden, for: .tabBar)
-}
-```
-
-**2. Position FabBar at the bottom** using `.safeAreaBar` and ignore the bottom safe area so you can control positioning manually:
-
-```swift
-TabView(selection: $selectedTab) {
-    // tabs...
-}
-.safeAreaBar(edge: .bottom) {
-    FabBar(...)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 21)  // Clear the home indicator
-}
-.ignoresSafeArea(.container, edges: .bottom)
-```
-
-**3. Add bottom padding to scrollable content** so it clears the tab bar. The total margin needed is `FabBar.height` plus your bottom padding:
-
-```swift
-let bottomMargin = FabBar<MyTab>.height + 21  // 62 + 21 = 83
-
-ScrollView {
-    // content...
-}
-.safeAreaPadding(.bottom, bottomMargin)
-```
-
-Consider creating a shared constant or environment value for this margin so it stays consistent across your app.
-
-**4. iPad considerations**: On larger screens, you likely want to hide the FabBar and rely on the native tab bar. Check `horizontalSizeClass` to conditionally show FabBar only on compact widths.
 
 ## Known Limitations
 
