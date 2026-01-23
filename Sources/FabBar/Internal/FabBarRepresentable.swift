@@ -8,8 +8,8 @@ import UIKit
 struct FabBarRepresentable<Tab: Hashable>: UIViewRepresentable {
     var size: CGSize
     var items: [FabBarItem<Tab>]
-    var barTint: Color = .primary.opacity(0.08)
-    var inactiveTint: Color = .primary
+    var barTint: UIColor = .label.withAlphaComponent(0.08)
+    var inactiveTint: UIColor = .label
     var action: FabAction
 
     @Binding var activeTab: Tab
@@ -34,7 +34,7 @@ struct FabBarRepresentable<Tab: Hashable>: UIViewRepresentable {
             control.setTitle(item.title, forSegmentAt: index)
         }
 
-        control.selectedSegmentTintColor = UIColor(barTint)
+        control.selectedSegmentTintColor = barTint
 
         control.addTarget(context.coordinator, action: #selector(context.coordinator.tabSelected(_:)), for: .valueChanged)
 
@@ -55,7 +55,7 @@ struct FabBarRepresentable<Tab: Hashable>: UIViewRepresentable {
         )
 
         // Set label colors
-        container.labelsOverlay.inactiveTintColor = UIColor(inactiveTint)
+        container.labelsOverlay.inactiveTintColor = inactiveTint
 
         return container
     }
@@ -72,10 +72,6 @@ struct FabBarRepresentable<Tab: Hashable>: UIViewRepresentable {
         // may already have the correct index from touch handling, but the overlay
         // needs to know the final selection for when onHighlightEnd is called
         uiView.labelsOverlay.setSelectedIndex(newIndex, animated: false)
-
-        // Reapply colors - UIKit can reset these after sheet presentations
-        control.selectedSegmentTintColor = UIColor(barTint)
-        uiView.labelsOverlay.inactiveTintColor = UIColor(inactiveTint)
 
         // Keep VoiceOver focus on the tab bar after selection changes
         if selectionChanged {
