@@ -54,23 +54,28 @@ enum AppTab: Hashable {
 
 struct ContentView: View {
     @State private var selectedTab: AppTab = .home
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var tabBarVisibility: Visibility {
+        horizontalSizeClass == .compact ? .hidden : .visible
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab(value: .home) {
+            Tab("Home", systemImage: "house.fill", value: .home) {
                 HomeView()
                     .fabBarSafeAreaPadding()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                    .toolbarVisibility(tabBarVisibility, for: .tabBar)
             }
-            Tab(value: .explore) {
+            Tab("Explore", systemImage: "compass", value: .explore) {
                 ExploreView()
                     .fabBarSafeAreaPadding()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                    .toolbarVisibility(tabBarVisibility, for: .tabBar)
             }
-            Tab(value: .profile) {
+            Tab("Profile", systemImage: "person.fill", value: .profile) {
                 ProfileView()
                     .fabBarSafeAreaPadding()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                    .toolbarVisibility(tabBarVisibility, for: .tabBar)
             }
         }
         .fabBar(
@@ -91,7 +96,7 @@ struct ContentView: View {
 }
 ```
 
-The `.fabBar()` modifier handles positioning, safe area management, and automatically hides on iPad. Use `.fabBarSafeAreaPadding()` on scrollable content within each tab to ensure content isn't hidden behind the bar.
+The `.fabBar()` modifier handles positioning, safe area management, and automatically hides on iPad (showing the native tab bar instead). Use `.fabBarSafeAreaPadding()` on scrollable content within each tab to ensure content isn't hidden behind the bar.
 
 For more control over positioning, you can use the `FabBar` view directly.
 
