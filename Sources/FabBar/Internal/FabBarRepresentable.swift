@@ -106,7 +106,11 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         let height = imageAreaHeight + textSize.height
         let size = CGSize(width: width, height: height)
 
-        let renderer = UIGraphicsImageRenderer(size: size)
+        let format = UIGraphicsImageRendererFormat.default()
+        // 3x to ensure crisp rendering on all screen scales, especially since we're drawing text
+        // 9x to make sure to support "larger text" a11y settings
+        format.scale = 9
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in
             let imageX = (width - icon.size.width) / 2
             let imageY = (imageAreaHeight - icon.size.height) / 2
