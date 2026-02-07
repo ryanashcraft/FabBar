@@ -99,21 +99,22 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
 
         guard let icon = image else { return nil }
 
-        let spacing: CGFloat = 4
         let horizontalPadding: CGFloat = 24
         let contentWidth = max(icon.size.width, textSize.width)
         let width = contentWidth + (horizontalPadding * 2)
-        let height = icon.size.height + spacing + textSize.height
+        let imageAreaHeight: CGFloat = Constants.iconViewSize
+        let height = imageAreaHeight + textSize.height
         let size = CGSize(width: width, height: height)
 
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { _ in
             let imageX = (width - icon.size.width) / 2
-            let imageRect = CGRect(x: imageX, y: 0, width: icon.size.width, height: icon.size.height)
+            let imageY = (imageAreaHeight - icon.size.height) / 2
+            let imageRect = CGRect(x: imageX, y: imageY, width: icon.size.width, height: icon.size.height)
             icon.draw(in: imageRect)
 
             let textX = (width - textSize.width) / 2
-            let textPoint = CGPoint(x: textX, y: icon.size.height + spacing)
+            let textPoint = CGPoint(x: textX, y: imageAreaHeight)
             (tab.title as NSString).draw(at: textPoint, withAttributes: [.font: font])
         }
     }
