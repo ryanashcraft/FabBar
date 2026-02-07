@@ -29,8 +29,8 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
 
         // Set titles for accessibility
         for (index, tab) in tabs.enumerated() {
-            control.setTitle(tab.title, forSegmentAt: index)
             if let composedImage = composedSegmentImage(for: tab) {
+                composedImage.accessibilityIdentifier = tab.title
                 control.setImage(composedImage, forSegmentAt: index)
             }
         }
