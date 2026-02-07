@@ -15,7 +15,7 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         Coordinator(parent: self)
     }
 
-    func makeUIView(context: Context) -> GlassTabBarView<Value> {
+    func makeUIView(context: Context) -> GlassTabBarView {
         // Use system images for segment sizing - labels will be hidden
         let images = tabs.compactMap { _ in
             UIImage(systemName: "circle")
@@ -25,12 +25,17 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         let selectedIndex = tabs.firstIndex { $0.value == activeTab } ?? 0
         control.selectedSegmentIndex = selectedIndex
 
+        control.setTitleTextAttributes([.foregroundColor: UIColor.tintColor], for: .selected)
+
         // Set titles for accessibility
         for (index, tab) in tabs.enumerated() {
             control.setTitle(tab.title, forSegmentAt: index)
+            if let composedImage = composedSegmentImage(for: tab) {
+                control.setImage(composedImage, forSegmentAt: index)
+            }
         }
 
-        control.selectedSegmentTintColor = .label.withAlphaComponent(0.08)
+        control.selectedSegmentTintColor = segmentTintColor(for: control.traitCollection)
 
         control.addTarget(context.coordinator, action: #selector(context.coordinator.tabSelected(_:)), for: .valueChanged)
 
@@ -42,40 +47,74 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
             }
         }
 
-        // Wrap in glass tab bar view with segmented control, tabs overlay, and FAB
+        // Wrap in glass tab bar view with segmented control and FAB
         let container = GlassTabBarView(
             segmentedControl: control,
-            tabs: tabs,
-            selectedIndex: selectedIndex,
             action: action
         )
-
-        container.labelsOverlay.inactiveTintColor = .label
 
         return container
     }
 
-    func updateUIView(_ uiView: GlassTabBarView<Value>, context: Context) {
+    func updateUIView(_ uiView: GlassTabBarView, context: Context) {
         context.coordinator.parent = self
 
         let control = uiView.segmentedControl
+        control.selectedSegmentTintColor = segmentTintColor(for: uiView.traitCollection)
         let newIndex = tabs.firstIndex { $0.value == activeTab } ?? 0
         let selectionChanged = control.selectedSegmentIndex != newIndex
         if selectionChanged {
             control.selectedSegmentIndex = newIndex
         }
+    }
 
-        // Always update the labels overlay's selected index - the segmented control
-        // may already have the correct index from touch handling, but the overlay
-        // needs to know the final selection for when onHighlightEnd is called
-        uiView.labelsOverlay.setSelectedIndex(newIndex, animated: false)
+    private func segmentTintColor(for traitCollection: UITraitCollection) -> UIColor {
+        switch traitCollection.userInterfaceStyle {
+        case .dark:
+            return .label.withAlphaComponent(0.15)
+        default:
+            return .label.withAlphaComponent(0.08)
+        }
+    }
 
-        // Set accent color from the view's inherited tintColor, converted to concrete color.
-        // Only update when tintAdjustmentMode is normal - when dimmed (e.g. sheet presented),
-        // tintColor returns a dimmed gray which would incorrectly overwrite the accent color.
-        if uiView.tintAdjustmentMode == .normal, let tint = uiView.tintColor {
-            let concreteAccentColor = UIColor(cgColor: tint.cgColor)
-            uiView.labelsOverlay.activeTintColor = concreteAccentColor
+    private func composedSegmentImage(for tab: FabBarTab<Value>) -> UIImage? {
+        let font = UIFont.systemFont(ofSize: Constants.tabTitleFontSize, weight: .medium)
+        let textSize = (tab.title as NSString).size(withAttributes: [.font: font])
+
+        let config = UIImage.SymbolConfiguration(
+            pointSize: Constants.tabIconPointSize,
+            weight: .medium,
+            scale: .large
+        )
+
+        let image: UIImage?
+        if let imageName = tab.image {
+            let bundle = tab.imageBundle ?? .main
+            image = UIImage(named: imageName, in: bundle, with: config)
+        } else if let systemName = tab.systemImage {
+            image = UIImage(systemName: systemName, withConfiguration: config)
+        } else {
+            image = nil
+        }
+
+        guard let icon = image else { return nil }
+
+        let spacing: CGFloat = 4
+        let horizontalPadding: CGFloat = 24
+        let contentWidth = max(icon.size.width, textSize.width)
+        let width = contentWidth + (horizontalPadding * 2)
+        let height = icon.size.height + spacing + textSize.height
+        let size = CGSize(width: width, height: height)
+
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            let imageX = (width - icon.size.width) / 2
+            let imageRect = CGRect(x: imageX, y: 0, width: icon.size.width, height: icon.size.height)
+            icon.draw(in: imageRect)
+
+            let textX = (width - textSize.width) / 2
+            let textPoint = CGPoint(x: textX, y: icon.size.height + spacing)
+            (tab.title as NSString).draw(at: textPoint, withAttributes: [.font: font])
         }
     }
 

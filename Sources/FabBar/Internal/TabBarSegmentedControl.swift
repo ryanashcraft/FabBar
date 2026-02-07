@@ -47,31 +47,7 @@ final class TabBarSegmentedControl: UISegmentedControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        hideSegmentLabels()
         hideSegmentBackgrounds()
-    }
-
-    override func didAddSubview(_ subview: UIView) {
-        super.didAddSubview(subview)
-        hideLabels(in: subview)
-    }
-
-    // MARK: - Label Hiding
-
-    /// Hides all labels within the segmented control.
-    /// UISegmentedControl creates internal labels for each segment title.
-    /// We hide these so our custom overlay labels are the only visible ones.
-    private func hideSegmentLabels() {
-        hideLabels(in: self)
-    }
-
-    private func hideLabels(in view: UIView) {
-        if let label = view as? UILabel {
-            label.isHidden = true
-        }
-        for subview in view.subviews {
-            hideLabels(in: subview)
-        }
     }
 
     // MARK: - Background Image Hiding
