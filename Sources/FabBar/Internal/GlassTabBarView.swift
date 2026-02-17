@@ -91,6 +91,7 @@ final class GlassTabBarView: UIView {
             segmentedControl.leadingAnchor.constraint(equalTo: segmentedGlassView.contentView.leadingAnchor, constant: contentPadding),
             segmentedControl.trailingAnchor.constraint(equalTo: segmentedGlassView.contentView.trailingAnchor, constant: -contentPadding),
             segmentedControl.topAnchor.constraint(equalTo: segmentedGlassView.contentView.topAnchor, constant: contentPadding),
+            // Subtract 1 point from bottom inset to account for an internal padding which makes the control look closer to the native iOS tab bar
             segmentedControl.bottomAnchor.constraint(equalTo: segmentedGlassView.contentView.bottomAnchor, constant: -contentPadding - 1),
 
             // FAB glass view

@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// A UIViewRepresentable that wraps a TabBarSegmentedControl for tab bar functionality.
-/// The segmented control's labels are hidden and replaced with custom UIKit label views,
-/// preserving UIKit's touch handling and glass effects while allowing full control over rendering.
+/// Since UISegmentedControl doesn't support both title and image at the same time, we create pre-rendered tab images
+/// that mimic the appearance of SwiftUI's tab items, allowing for both icons and text in each segment. This preserves
+/// UIKit's touch handling and glass effects while allowing full control over rendering.
 @available(iOS 26.0, *)
 struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
     var tabs: [FabBarTab<Value>]
@@ -16,7 +17,8 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> GlassTabBarView {
-        // Use system images for segment sizing - labels will be hidden
+        // Create some images to pre-fill the segmented control with, so it allocates the right number of segments.
+        // We'll replace these with our custom-rendered images immediately after.
         let images = tabs.compactMap { _ in
             UIImage(systemName: "circle")
         }
@@ -27,13 +29,7 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
 
         control.setTitleTextAttributes([.foregroundColor: UIColor.tintColor], for: .selected)
 
-        // Set titles for accessibility
-        for (index, tab) in tabs.enumerated() {
-            if let composedImage = composedSegmentImage(for: tab) {
-                composedImage.accessibilityIdentifier = tab.title
-                control.setImage(composedImage, forSegmentAt: index)
-            }
-        }
+        applySegmentImages(to: control, using: context.environment.displayScale)
 
         control.selectedSegmentTintColor = segmentTintColor(for: control.traitCollection)
 
@@ -77,7 +73,34 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         }
     }
 
-    private func composedSegmentImage(for tab: FabBarTab<Value>) -> UIImage? {
+    private func applySegmentImages(to control: UISegmentedControl, using scale: CGFloat) {
+        let horizontalPadding = horizontalPadding(for: tabs.count)
+
+        for (index, tab) in tabs.enumerated() {
+            if let composedImage = composedSegmentImage(for: tab, horizontalPadding: horizontalPadding, scale: scale) {
+                composedImage.accessibilityIdentifier = tab.title
+                control.setImage(composedImage, forSegmentAt: index)
+            }
+        }
+    }
+
+    /// Determines horizontal padding for tab content based on the number of tabs.
+    ///
+    /// This ensures that tab bars with fewer items look as close as possible to the standard iOS tab bar style, which
+    /// has more padding around items when there are fewer of them. Also ensures that tab items are not squeezed when
+    /// there are many of them.
+    private func horizontalPadding(for tabCount: Int) -> CGFloat {
+        switch tabCount {
+        case 1 ... 3:
+            return 24
+        case 4:
+            return 8
+        default:
+            return 0
+        }
+    }
+
+    private func composedSegmentImage(for tab: FabBarTab<Value>, horizontalPadding: CGFloat, scale: CGFloat) -> UIImage? {
         let font = UIFont.systemFont(ofSize: Constants.tabTitleFontSize, weight: .medium)
         let textSize = (tab.title as NSString).size(withAttributes: [.font: font])
 
@@ -99,7 +122,6 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
 
         guard let icon = image else { return nil }
 
-        let horizontalPadding: CGFloat = 24
         let contentWidth = max(icon.size.width, textSize.width)
         let width = contentWidth + (horizontalPadding * 2)
         let imageAreaHeight: CGFloat = Constants.iconViewSize
@@ -107,9 +129,8 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         let size = CGSize(width: width, height: height)
 
         let format = UIGraphicsImageRendererFormat.default()
-        // 3x to ensure crisp rendering on all screen scales, especially since we're drawing text
-        // 9x to make sure to support "larger text" a11y settings
-        format.scale = 9
+        // 3x to make sure the images look crisp in the "larger text" a11y popover
+        format.scale = scale * 3
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in
             let imageX = (width - icon.size.width) / 2
