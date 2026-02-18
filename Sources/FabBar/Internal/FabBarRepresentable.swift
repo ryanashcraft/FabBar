@@ -29,7 +29,29 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
 
         control.setTitleTextAttributes([.foregroundColor: UIColor.tintColor], for: .selected)
 
-        applySegmentImages(to: control, using: context.environment.displayScale)
+        applySegmentImages(
+            to: control,
+            scale: context.environment.displayScale,
+            isForAccessibilityPopover: false
+        )
+
+        control.onPrepareAccessibilityPopover = { [weak control] in
+            guard let control else { return }
+            applySegmentImages(
+                to: control,
+                scale: context.environment.displayScale,
+                isForAccessibilityPopover: true
+            )
+        }
+
+        control.onPostAccessibilityPopoverTraitChange = { [weak control] in
+            guard let control else { return }
+            applySegmentImages(
+                to: control,
+                scale: context.environment.displayScale,
+                isForAccessibilityPopover: false
+            )
+        }
 
         control.selectedSegmentTintColor = segmentTintColor(for: control.traitCollection)
 
@@ -73,11 +95,16 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         }
     }
 
-    private func applySegmentImages(to control: UISegmentedControl, using scale: CGFloat) {
+    private func applySegmentImages(to control: UISegmentedControl, scale: CGFloat, isForAccessibilityPopover: Bool) {
         let horizontalPadding = horizontalPadding(for: tabs.count)
 
         for (index, tab) in tabs.enumerated() {
-            if let composedImage = composedSegmentImage(for: tab, horizontalPadding: horizontalPadding, scale: scale) {
+            if let composedImage = composedSegmentImage(
+                for: tab,
+                horizontalPadding: horizontalPadding,
+                scale: scale,
+                isForAccessibilityPopover: isForAccessibilityPopover
+            ) {
                 composedImage.accessibilityIdentifier = tab.title
                 control.setImage(composedImage, forSegmentAt: index)
             }
@@ -100,7 +127,16 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         }
     }
 
-    private func composedSegmentImage(for tab: FabBarTab<Value>, horizontalPadding: CGFloat, scale: CGFloat) -> UIImage? {
+    /// Renders a single tab segment image that combines icon + title into one bitmap for `UISegmentedControl`.
+    ///
+    /// `isForAccessibilityPopover` uses higher rasterization scale so the system accessibility popover preview
+    /// remains crisp. Normal tab-bar rendering uses regular scale to avoid downscaling blur in the control itself.
+    private func composedSegmentImage(
+        for tab: FabBarTab<Value>,
+        horizontalPadding: CGFloat,
+        scale: CGFloat,
+        isForAccessibilityPopover: Bool
+    ) -> UIImage? {
         let font = UIFont.systemFont(ofSize: Constants.tabTitleFontSize, weight: .medium)
         let textSize = (tab.title as NSString).size(withAttributes: [.font: font])
 
@@ -129,8 +165,16 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         let size = CGSize(width: width, height: height)
 
         let format = UIGraphicsImageRendererFormat.default()
-        // 3x to make sure the images look crisp in the "larger text" a11y popover
-        format.scale = scale * 3
+
+        let targetScale = if isForAccessibilityPopover {
+            // Render at higher scale for the accessibility popover, since the tab items are way larger there
+            scale * 3
+        } else {
+            scale
+        }
+
+        format.scale = targetScale
+
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in
             let imageX = (width - icon.size.width) / 2

@@ -13,16 +13,40 @@ import UIKit
 ///    of UITabBar. The actual selection change is deferred until touch up via `sendActions(for:)`.
 ///
 /// 3. **Reselection callback**: Notifies when user taps an already-selected segment.
+///
+/// 4. **Accessibility popover image timing hooks**: Emits a prepare callback on long-press begin so tab images can
+///    be rendered for accessibility popover presentation, then emits a post-popover trait-change callback to restore
+///    crisp tab-bar rendering immediately after the popover-related trait update.
 @available(iOS 26.0, *)
-final class TabBarSegmentedControl: UISegmentedControl {
+final class TabBarSegmentedControl: UISegmentedControl, UIGestureRecognizerDelegate {
     /// The segment index before touch began, used to restore on cancel and detect actual changes.
     private var originalIndex: Int?
+
+    /// Set to true right before the accessibility popover gets presented, so we can react to its immediate trait update.
+    private var pendingPostAccessibilityPopoverTraitChange = false
+    private lazy var prepareAccessibilityLongPressGestureRecognizer: UILongPressGestureRecognizer = {
+        let recognizer = UILongPressGestureRecognizer(
+            target: self,
+            action: #selector(handleLongPress(_:))
+        )
+        recognizer.delegate = self
+        // This is important: the long press gesture needs to trigger before the accessibility popover is shown, otherwise
+        // the callback will have no effect on the popover's appearance.
+        recognizer.minimumPressDuration = 0.1
+        recognizer.cancelsTouchesInView = false
+        return recognizer
+    }()
+
+    var onPrepareAccessibilityPopover: (() -> Void)?
+    var onPostAccessibilityPopoverTraitChange: (() -> Void)?
 
     override init(items: [Any]?) {
         super.init(items: items)
         // Note: .tabBar trait doesn't affect VoiceOver announcements on UISegmentedControl,
         // but it's set here for semantic correctness since this control functions as a tab bar.
         accessibilityTraits = .tabBar
+
+        addGestureRecognizer(prepareAccessibilityLongPressGestureRecognizer)
     }
 
     @available(*, unavailable)
@@ -36,6 +60,14 @@ final class TabBarSegmentedControl: UISegmentedControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         hideSegmentBackgrounds()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+
+        guard pendingPostAccessibilityPopoverTraitChange else { return }
+        onPostAccessibilityPopoverTraitChange?()
+        pendingPostAccessibilityPopoverTraitChange = false
     }
 
     // MARK: - Background Image Hiding
@@ -118,5 +150,22 @@ final class TabBarSegmentedControl: UISegmentedControl {
         }
         originalIndex = nil
         super.touchesCancelled(touches, with: event)
+    }
+
+    @objc
+    private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, traitCollection.preferredContentSizeCategory.isAccessibilityCategory else {
+            return
+        }
+
+        pendingPostAccessibilityPopoverTraitChange = true
+        onPrepareAccessibilityPopover?()
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
     }
 }
