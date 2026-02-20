@@ -3,25 +3,25 @@ import UIKit
 /// The root UIKit view that assembles the tab bar with glass effects.
 /// Uses UIGlassContainerEffect to enable morphing between the segmented control and FAB.
 @available(iOS 26.0, *)
-final class GlassTabBarView<Value: Hashable>: UIView {
+final class GlassTabBarView: UIView {
     let containerEffectView: UIVisualEffectView
     let segmentedGlassView: UIVisualEffectView
     let segmentedControl: TabBarSegmentedControl
-    let labelsOverlay: TabItemsOverlay<Value>
     let fabGlassView: UIVisualEffectView
     let fabButton: UIButton
 
     private let spacing: CGFloat = Constants.fabSpacing
     private let contentPadding: CGFloat = Constants.contentPadding
 
+    private let tabCount: Int
+
     init(
         segmentedControl: TabBarSegmentedControl,
-        tabs: [FabBarTab<Value>],
-        selectedIndex: Int,
+        tabCount: Int,
         action: FabBarAction
     ) {
         self.segmentedControl = segmentedControl
-        labelsOverlay = TabItemsOverlay(tabs: tabs, selectedIndex: selectedIndex)
+        self.tabCount = tabCount
 
         // Create glass container effect for morphing
         let containerEffect = UIGlassContainerEffect()
@@ -56,7 +56,6 @@ final class GlassTabBarView<Value: Hashable>: UIView {
         fabButton.tintAdjustmentMode = .automatic
 
         setupViews(action: action)
-        setupHighlightCallbacks()
     }
 
     private func setupViews(action: FabBarAction) {
@@ -71,10 +70,6 @@ final class GlassTabBarView<Value: Hashable>: UIView {
         // Add segmented control to segmented glass view's contentView
         segmentedGlassView.contentView.addSubview(segmentedControl)
         segmentedControl.translatesAutoresizingMaskIntoConstraints = false
-
-        // Add labels overlay on top of segmented control
-        segmentedGlassView.contentView.addSubview(labelsOverlay)
-        labelsOverlay.translatesAutoresizingMaskIntoConstraints = false
 
         // Add FAB glass view
         containerEffectView.contentView.addSubview(fabGlassView)
@@ -95,18 +90,16 @@ final class GlassTabBarView<Value: Hashable>: UIView {
             segmentedGlassView.leadingAnchor.constraint(equalTo: containerEffectView.contentView.leadingAnchor),
             segmentedGlassView.topAnchor.constraint(equalTo: containerEffectView.contentView.topAnchor),
             segmentedGlassView.bottomAnchor.constraint(equalTo: containerEffectView.contentView.bottomAnchor),
-            segmentedGlassView.trailingAnchor.constraint(equalTo: fabGlassView.leadingAnchor, constant: -spacing),
+            // For 3+ tabs, fill to the FAB. For fewer tabs, float leading-aligned.
+            tabCount >= 3
+                ? segmentedGlassView.trailingAnchor.constraint(equalTo: fabGlassView.leadingAnchor, constant: -spacing)
+                : segmentedGlassView.trailingAnchor.constraint(lessThanOrEqualTo: fabGlassView.leadingAnchor, constant: -spacing),
 
             segmentedControl.leadingAnchor.constraint(equalTo: segmentedGlassView.contentView.leadingAnchor, constant: contentPadding),
             segmentedControl.trailingAnchor.constraint(equalTo: segmentedGlassView.contentView.trailingAnchor, constant: -contentPadding),
             segmentedControl.topAnchor.constraint(equalTo: segmentedGlassView.contentView.topAnchor, constant: contentPadding),
-            segmentedControl.bottomAnchor.constraint(equalTo: segmentedGlassView.contentView.bottomAnchor, constant: -contentPadding),
-
-            // Labels overlay matches segmented control exactly
-            labelsOverlay.leadingAnchor.constraint(equalTo: segmentedControl.leadingAnchor),
-            labelsOverlay.trailingAnchor.constraint(equalTo: segmentedControl.trailingAnchor),
-            labelsOverlay.topAnchor.constraint(equalTo: segmentedControl.topAnchor),
-            labelsOverlay.bottomAnchor.constraint(equalTo: segmentedControl.bottomAnchor),
+            // Subtract 1 point from bottom inset to account for an internal padding which makes the control look closer to the native iOS tab bar
+            segmentedControl.bottomAnchor.constraint(equalTo: segmentedGlassView.contentView.bottomAnchor, constant: -contentPadding - 1),
 
             // FAB glass view
             fabGlassView.trailingAnchor.constraint(equalTo: containerEffectView.contentView.trailingAnchor),
@@ -120,16 +113,6 @@ final class GlassTabBarView<Value: Hashable>: UIView {
             fabButton.topAnchor.constraint(equalTo: fabGlassView.contentView.topAnchor),
             fabButton.bottomAnchor.constraint(equalTo: fabGlassView.contentView.bottomAnchor),
         ])
-    }
-
-    private func setupHighlightCallbacks() {
-        segmentedControl.onHighlightChange = { [weak self] index in
-            self?.labelsOverlay.setHighlightedIndex(index)
-        }
-
-        segmentedControl.onHighlightEnd = { [weak self] in
-            self?.labelsOverlay.setHighlightedIndex(nil)
-        }
     }
 
     @available(*, unavailable)

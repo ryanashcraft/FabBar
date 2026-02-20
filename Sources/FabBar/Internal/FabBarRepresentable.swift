@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// A UIViewRepresentable that wraps a TabBarSegmentedControl for tab bar functionality.
-/// The segmented control's labels are hidden and replaced with custom UIKit label views,
-/// preserving UIKit's touch handling and glass effects while allowing full control over rendering.
+/// Tab content (icon + label) is injected directly into each segment's view subtree so that
+/// the glass magnification effect applies to the content. SF Symbols remain vector-based
+/// and scale at any resolution, avoiding rasterization issues in accessibility popovers.
 @available(iOS 26.0, *)
 struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
     var tabs: [FabBarTab<Value>]
@@ -15,8 +16,7 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         Coordinator(parent: self)
     }
 
-    func makeUIView(context: Context) -> GlassTabBarView<Value> {
-        // Use system images for segment sizing - labels will be hidden
+    func makeUIView(context: Context) -> GlassTabBarView {
         let images = tabs.compactMap { _ in
             UIImage(systemName: "circle")
         }
@@ -25,12 +25,40 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         let selectedIndex = tabs.firstIndex { $0.value == activeTab } ?? 0
         control.selectedSegmentIndex = selectedIndex
 
-        // Set titles for accessibility
+        control.setTitleTextAttributes([.foregroundColor: UIColor.tintColor], for: .selected)
+
+        // Set accessibility titles on each segment
         for (index, tab) in tabs.enumerated() {
             control.setTitle(tab.title, forSegmentAt: index)
         }
 
-        control.selectedSegmentTintColor = .label.withAlphaComponent(0.08)
+        // Create content views for injection into segment views.
+        // These use draw(_:) rendering with NSCoding support, so when the accessibility
+        // popover archives/unarchives them they hide (via init(coder:)), letting the
+        // native segment labels render crisply at popover scale.
+        let contentViews: [TabItemContentView] = tabs.map { tab in
+            if let imageName = tab.image {
+                TabItemContentView(title: tab.title, imageName: imageName, imageBundle: tab.imageBundle)
+            } else {
+                TabItemContentView(title: tab.title, symbolName: tab.systemImage ?? "")
+            }
+        }
+        control.configureContentViews(contentViews)
+
+        // For fewer than 3 tabs, set explicit segment widths so the glass view
+        // floats leading-aligned (lessThanOrEqualTo constraint). For 3+ tabs,
+        // let segments auto-distribute equally to fill the available space.
+        if tabs.count < 3 {
+            let horizontalPadding: CGFloat = 24
+            for (index, contentView) in contentViews.enumerated() {
+                let width = contentView.intrinsicContentSize.width + horizontalPadding * 2
+                control.setWidth(width, forSegmentAt: index)
+            }
+        }
+
+        control.inactiveTintColor = .label
+        control.setSelectedIndex(selectedIndex, animated: false)
+        control.selectedSegmentTintColor = segmentTintColor(for: control.traitCollection)
 
         control.addTarget(context.coordinator, action: #selector(context.coordinator.tabSelected(_:)), for: .valueChanged)
 
@@ -42,40 +70,46 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
             }
         }
 
-        // Wrap in glass tab bar view with segmented control, tabs overlay, and FAB
+        // Wrap in glass tab bar view with segmented control and FAB
         let container = GlassTabBarView(
             segmentedControl: control,
-            tabs: tabs,
-            selectedIndex: selectedIndex,
+            tabCount: tabs.count,
             action: action
         )
-
-        container.labelsOverlay.inactiveTintColor = .label
 
         return container
     }
 
-    func updateUIView(_ uiView: GlassTabBarView<Value>, context: Context) {
+    func updateUIView(_ uiView: GlassTabBarView, context: Context) {
         context.coordinator.parent = self
 
         let control = uiView.segmentedControl
+        control.selectedSegmentTintColor = segmentTintColor(for: uiView.traitCollection)
         let newIndex = tabs.firstIndex { $0.value == activeTab } ?? 0
-        let selectionChanged = control.selectedSegmentIndex != newIndex
-        if selectionChanged {
+        if control.selectedSegmentIndex != newIndex {
             control.selectedSegmentIndex = newIndex
         }
 
-        // Always update the labels overlay's selected index - the segmented control
-        // may already have the correct index from touch handling, but the overlay
-        // needs to know the final selection for when onHighlightEnd is called
-        uiView.labelsOverlay.setSelectedIndex(newIndex, animated: false)
+        // Always update the content view selected index — the segmented control
+        // may already have the correct index from touch handling, but the content
+        // views need to know the final selection for when highlight ends.
+        control.setSelectedIndex(newIndex, animated: false)
 
-        // Set accent color from the view's inherited tintColor, converted to concrete color.
-        // Only update when tintAdjustmentMode is normal - when dimmed (e.g. sheet presented),
+        // Set accent color from the view's inherited tintColor, converted to a concrete color.
+        // Only update when tintAdjustmentMode is normal — when dimmed (e.g. sheet presented),
         // tintColor returns a dimmed gray which would incorrectly overwrite the accent color.
         if uiView.tintAdjustmentMode == .normal, let tint = uiView.tintColor {
             let concreteAccentColor = UIColor(cgColor: tint.cgColor)
-            uiView.labelsOverlay.activeTintColor = concreteAccentColor
+            control.activeTintColor = concreteAccentColor
+        }
+    }
+
+    private func segmentTintColor(for traitCollection: UITraitCollection) -> UIColor {
+        switch traitCollection.userInterfaceStyle {
+        case .dark:
+            return .label.withAlphaComponent(0.15)
+        default:
+            return .label.withAlphaComponent(0.08)
         }
     }
 
