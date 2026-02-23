@@ -45,14 +45,12 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         }
         control.configureContentViews(contentViews)
 
-        // For fewer than 3 tabs, set explicit segment widths so the glass view
+        // For fewer than 3 tabs, set a fixed segment width so the glass view
         // floats leading-aligned (lessThanOrEqualTo constraint). For 3+ tabs,
         // let segments auto-distribute equally to fill the available space.
         if tabs.count < 3 {
-            let horizontalPadding: CGFloat = 24
-            for (index, contentView) in contentViews.enumerated() {
-                let width = contentView.intrinsicContentSize.width + horizontalPadding * 2
-                control.setWidth(width, forSegmentAt: index)
+            for index in 0..<tabs.count {
+                control.setWidth(Constants.fewTabsSegmentWidth, forSegmentAt: index)
             }
         }
 

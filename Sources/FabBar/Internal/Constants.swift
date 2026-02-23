@@ -46,6 +46,12 @@ enum Constants {
     /// Matches Apple HIG recommendations for tab bar labels.
     static let tabTitleFontSize: CGFloat = 10
 
+    // MARK: - Segment Sizing
+
+    /// Fixed segment width used when there are fewer than 3 tabs.
+    /// With 3+ tabs, segments auto-distribute to fill the available space.
+    static let fewTabsSegmentWidth: CGFloat = 98
+
     // MARK: - Animation
 
     /// Duration for color transition animations.
