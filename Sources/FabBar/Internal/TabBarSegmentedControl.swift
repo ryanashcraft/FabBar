@@ -405,6 +405,9 @@ final class TabBarSegmentedControl: UISegmentedControl {
 
         let newIndex = segmentIndex(at: touch.location(in: self))
 
+        displayLink?.isPaused = false
+        stableFrameCount = 0
+
         if shouldMoveIndicatorOnTouchDown && selectedSegmentIndex != newIndex {
             selectedSegmentIndex = newIndex
         }
