@@ -331,36 +331,50 @@ final class TabBarSegmentedControl: UISegmentedControl {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        for accentView in accentContentViews {
-            updateMask(on: accentView, indicatorRect: indicatorRect)
+        for (index, accentView) in accentContentViews.enumerated() {
+            let baseView = contentViews[index]
+            updateMasks(base: baseView, accent: accentView, indicatorRect: indicatorRect)
         }
 
         CATransaction.commit()
     }
 
-    private func updateMask(on accentView: TabItemContentView, indicatorRect: CGRect) {
+    private func updateMasks(base baseView: TabItemContentView, accent accentView: TabItemContentView, indicatorRect: CGRect) {
         // Use presentation layers for consistency with indicatorRect
         let accentPres = accentView.layer.presentation() ?? accentView.layer
         let selfPres = self.layer.presentation() ?? self.layer
-        let accentRectInControl = selfPres.convert(accentPres.bounds, from: accentPres)
-        let intersection = indicatorRect.intersection(accentRectInControl)
+        let viewRectInControl = selfPres.convert(accentPres.bounds, from: accentPres)
+        let intersection = indicatorRect.intersection(viewRectInControl)
 
-        let maskLayer = accentView.layer.mask as? CAShapeLayer ?? {
+        let accentMask = accentView.layer.mask as? CAShapeLayer ?? {
             let m = CAShapeLayer()
             accentView.layer.mask = m
             return m
         }()
 
+        let baseMask = baseView.layer.mask as? CAShapeLayer ?? {
+            let m = CAShapeLayer()
+            baseView.layer.mask = m
+            return m
+        }()
+
         if intersection.isNull || intersection.isEmpty {
-            maskLayer.path = UIBezierPath(rect: .zero).cgPath
+            accentMask.path = UIBezierPath(rect: .zero).cgPath
+            baseView.layer.mask = nil // fully visible
         } else {
             let localRect = CGRect(
-                x: intersection.origin.x - accentRectInControl.origin.x,
-                y: intersection.origin.y - accentRectInControl.origin.y,
+                x: intersection.origin.x - viewRectInControl.origin.x,
+                y: intersection.origin.y - viewRectInControl.origin.y,
                 width: intersection.width,
                 height: intersection.height
             )
-            maskLayer.path = UIBezierPath(rect: localRect).cgPath
+            // Accent: show only inside indicator
+            accentMask.path = UIBezierPath(rect: localRect).cgPath
+            // Base: cut out the indicator rect using even-odd fill
+            let basePath = UIBezierPath(rect: baseView.bounds)
+            basePath.append(UIBezierPath(rect: localRect))
+            baseMask.fillRule = .evenOdd
+            baseMask.path = basePath.cgPath
         }
     }
 
