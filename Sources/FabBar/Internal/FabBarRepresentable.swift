@@ -26,15 +26,14 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         control.selectedSegmentIndex = selectedIndex
 
         configureSegmentContent(on: control)
-
-        control.setSelectedIndex(selectedIndex, animated: false)
         control.selectedSegmentTintColor = segmentTintColor(for: control.traitCollection)
 
         control.addTarget(context.coordinator, action: #selector(context.coordinator.tabSelected(_:)), for: .valueChanged)
 
         // Handle reselection (tapping already-selected segment)
         let coordinator = context.coordinator
-        control.onReselect = { index in
+        control.onReselect = { [weak coordinator] index in
+            guard let coordinator else { return }
             if index >= 0 && index < coordinator.parent.tabs.count {
                 coordinator.parent.tabs[index].onReselect?()
             }
@@ -82,11 +81,6 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
             control.selectedSegmentIndex = newIndex
         }
 
-        // Always update the content view selected index — the segmented control
-        // may already have the correct index from touch handling, but the content
-        // views need to know the final selection for when highlight ends.
-        control.setSelectedIndex(newIndex, animated: false)
-
         // Set accent color from the view's inherited tintColor, converted to a concrete color.
         // Only update when tintAdjustmentMode is normal — when dimmed (e.g. sheet presented),
         // tintColor returns a dimmed gray which would incorrectly overwrite the accent color.
@@ -105,18 +99,23 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         // Content views use draw(_:) rendering with NSCoding support, so when the
         // accessibility popover archives/unarchives them they hide (via init(coder:)),
         // letting the native segment labels render crisply at popover scale.
-        let contentViews: [TabItemContentView] = tabs.map { tab in
-            if let imageName = tab.image {
-                TabItemContentView(title: tab.title, imageName: imageName, imageBundle: tab.imageBundle)
-            } else {
-                TabItemContentView(title: tab.title, symbolName: tab.systemImage ?? "")
-            }
-        }
-        control.configureContentViews(contentViews)
+        // Two views per segment: base (inactive) underneath, accent (active) on top
+        // masked to the glass indicator position.
+        let baseViews = tabs.map(makeContentView)
+        let accentViews = tabs.map(makeContentView)
+        control.configureContentViews(baseViews, accentViews: accentViews)
 
         // Fixed width for <3 tabs (glass floats leading-aligned); 0 for 3+ (auto-distribute)
         for index in 0..<tabs.count {
             control.setWidth(tabs.count < 3 ? Constants.fewTabsSegmentWidth : 0, forSegmentAt: index)
+        }
+    }
+
+    private func makeContentView(for tab: FabBarTab<Value>) -> TabItemContentView {
+        if let imageName = tab.image {
+            TabItemContentView(title: tab.title, imageName: imageName, imageBundle: tab.imageBundle)
+        } else {
+            TabItemContentView(title: tab.title, symbolName: tab.systemImage ?? "")
         }
     }
 

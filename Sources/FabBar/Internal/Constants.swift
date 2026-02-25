@@ -52,11 +52,6 @@ enum Constants {
     /// With 3+ tabs, segments auto-distribute to fill the available space.
     static let fewTabsSegmentWidth: CGFloat = 98
 
-    // MARK: - Animation
-
-    /// Duration for color transition animations.
-    /// Quick enough to feel responsive, slow enough to be perceptible.
-    static let colorTransitionDuration: TimeInterval = 0.15
 }
 
 /// Logger for FabBar warnings and diagnostics.

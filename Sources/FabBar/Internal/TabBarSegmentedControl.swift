@@ -15,8 +15,9 @@ import UIKit
 ///    which triggers the glass effect animation for any segment tap—matching the behavior
 ///    of UITabBar. The actual selection change is deferred until touch up via `sendActions(for:)`.
 ///
-/// 3. **Highlight tracking**: Reports which segment is visually highlighted during touch,
-///    updating injected content view colors to match the glass indicator position.
+/// 3. **Accent masking**: Tracks the glass indicator's animated position via `CADisplayLink`
+///    and masks accent-colored content views to the indicator rect, so content under the glass
+///    appears in the accent color — matching native UITabBar behavior.
 ///
 /// 4. **Reselection callback**: Notifies when user taps an already-selected segment.
 @available(iOS 26.0, *)
@@ -26,15 +27,29 @@ final class TabBarSegmentedControl: UISegmentedControl {
 
     /// Tag used to identify injected content views within segments.
     private static let injectedViewTag = 7_777
+    /// Tag used to identify accent (active-colored) content views within segments.
+    private static let accentViewTag = 7_778
 
-    /// Stored tab content views to inject into segments.
+    /// Stored tab content views to inject into segments (always inactive color).
     private var contentViews: [TabItemContentView] = []
+    /// Accent-colored duplicates, masked to the glass indicator position.
+    private var accentContentViews: [TabItemContentView] = []
 
-    /// The committed selected index for color purposes.
-    private var colorSelectedIndex: Int = 0
+    /// Display link for updating accent masks each frame.
+    private var displayLink: CADisplayLink?
+    /// Weak proxy to avoid CADisplayLink retain cycle.
+    private var displayLinkProxy: DisplayLinkProxy?
 
-    /// The index currently highlighted during touch, or nil when not touching.
-    private var highlightedIndex: Int?
+    /// Tracks indicator position stability for display link pausing.
+    private var lastIndicatorRect: CGRect = .zero
+    private var stableFrameCount: Int = 0
+    private static let stableFrameThreshold = 3
+
+    /// Whether the segment-frame fallback log has already been emitted.
+    private var didLogFallback = false
+
+    /// Cached reference to the internal glass indicator view. Invalidated on segment rebuild.
+    private weak var cachedIndicatorView: UIView?
 
     /// Tint color for the selected/highlighted tab's content view.
     /// Set to a concrete color (not the dynamic `.tintColor`) to avoid auto-dimming during sheet presentation.
@@ -64,10 +79,21 @@ final class TabBarSegmentedControl: UISegmentedControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        displayLink?.isPaused = false
+        stableFrameCount = 0
         hideSegmentBackgrounds()
         hideDefaultLabels()
         injectContentViewsIfNeeded()
         updateContentViewColors()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil {
+            startDisplayLink()
+        } else {
+            stopDisplayLink()
+        }
     }
 
     override func didAddSubview(_ subview: UIView) {
@@ -76,78 +102,80 @@ final class TabBarSegmentedControl: UISegmentedControl {
         hideLabelsRecursively(in: subview)
     }
 
-    // MARK: - Selection & Highlight
-
-    /// Updates the committed selected index and refreshes content view colors.
-    func setSelectedIndex(_ index: Int, animated: Bool) {
-        colorSelectedIndex = index
-        if highlightedIndex == nil {
-            updateContentViewColors(animated: animated)
-        }
-    }
-
-    /// Updates the highlighted index during touch interaction.
-    private func setHighlightedIndex(_ index: Int?) {
-        highlightedIndex = index
-        updateContentViewColors(animated: true)
-    }
-
     // MARK: - Content View Injection
 
     /// Configures the tab content views to be injected into each segment's view subtree.
-    func configureContentViews(_ views: [TabItemContentView]) {
+    /// Base views are always inactive-colored; accent views are always active-colored and
+    /// masked to the glass indicator position.
+    func configureContentViews(_ baseViews: [TabItemContentView], accentViews: [TabItemContentView]) {
+        cachedIndicatorView = nil
+
         // Remove previously injected views from segment subtrees.
         // Uses tag-based lookup so this works even if segments were rebuilt
         // (the old tagged views will have been removed with their parent segments).
         for segmentView in findSegmentViews() {
             segmentView.viewWithTag(Self.injectedViewTag)?.removeFromSuperview()
+            segmentView.viewWithTag(Self.accentViewTag)?.removeFromSuperview()
         }
-        contentViews = views
+        contentViews = baseViews
+        accentContentViews = accentViews
         setNeedsLayout()
     }
 
-    /// Finds each internal segment view and injects a `TabItemContentView` as a subview.
+    /// Finds each internal segment view and injects base + accent `TabItemContentView`s as subviews.
     private func injectContentViewsIfNeeded() {
         let segmentViews = findSegmentViews()
-        guard segmentViews.count == contentViews.count else { return }
+        guard segmentViews.count == contentViews.count,
+              segmentViews.count == accentContentViews.count else { return }
 
         for (index, segmentView) in segmentViews.enumerated() {
-            // Skip if already injected
-            if segmentView.viewWithTag(Self.injectedViewTag) != nil {
-                continue
+            // Base (inactive) content view
+            if segmentView.viewWithTag(Self.injectedViewTag) == nil {
+                let contentView = contentViews[index]
+                contentView.tag = Self.injectedViewTag
+                contentView.translatesAutoresizingMaskIntoConstraints = false
+                segmentView.addSubview(contentView)
+
+                NSLayoutConstraint.activate([
+                    contentView.centerXAnchor.constraint(equalTo: segmentView.centerXAnchor),
+                    contentView.centerYAnchor.constraint(equalTo: segmentView.centerYAnchor),
+                    contentView.widthAnchor.constraint(equalToConstant: contentView.intrinsicContentSize.width),
+                    contentView.heightAnchor.constraint(equalToConstant: contentView.intrinsicContentSize.height),
+                ])
             }
 
-            let contentView = contentViews[index]
-            contentView.tag = Self.injectedViewTag
-            contentView.translatesAutoresizingMaskIntoConstraints = false
-            segmentView.addSubview(contentView)
+            // Accent (active) content view on top, masked to the glass indicator
+            if segmentView.viewWithTag(Self.accentViewTag) == nil {
+                let accentView = accentContentViews[index]
+                accentView.tag = Self.accentViewTag
+                accentView.translatesAutoresizingMaskIntoConstraints = false
+                segmentView.addSubview(accentView)
 
-            NSLayoutConstraint.activate([
-                contentView.centerXAnchor.constraint(equalTo: segmentView.centerXAnchor),
-                contentView.centerYAnchor.constraint(equalTo: segmentView.centerYAnchor),
-                contentView.widthAnchor.constraint(equalToConstant: contentView.intrinsicContentSize.width),
-                contentView.heightAnchor.constraint(equalToConstant: contentView.intrinsicContentSize.height),
-            ])
+                NSLayoutConstraint.activate([
+                    accentView.centerXAnchor.constraint(equalTo: segmentView.centerXAnchor),
+                    accentView.centerYAnchor.constraint(equalTo: segmentView.centerYAnchor),
+                    accentView.widthAnchor.constraint(equalToConstant: accentView.intrinsicContentSize.width),
+                    accentView.heightAnchor.constraint(equalToConstant: accentView.intrinsicContentSize.height),
+                ])
+
+                // Start fully hidden; display link will reveal via mask
+                let maskLayer = CAShapeLayer()
+                maskLayer.path = UIBezierPath(rect: .zero).cgPath
+                accentView.layer.mask = maskLayer
+            }
         }
     }
 
     // MARK: - Content View Colors
 
-    /// Updates each content view's tint color based on highlight/selection state.
-    private func updateContentViewColors(animated: Bool = false) {
-        let activeIndex = highlightedIndex ?? colorSelectedIndex
-
-        for (index, contentView) in contentViews.enumerated() {
-            let color = index == activeIndex ? activeTintColor : inactiveTintColor
-            if contentView.tintColor != color {
-                if animated {
-                    UIView.animate(withDuration: Constants.colorTransitionDuration) {
-                        contentView.tintColor = color
-                    }
-                } else {
-                    contentView.tintColor = color
-                }
-            }
+    /// Sets base content views to inactive color and accent content views to active color.
+    /// The visual accent effect is handled by masking accent views to the glass indicator.
+    private func updateContentViewColors() {
+        for contentView in contentViews {
+            contentView.tintColor = inactiveTintColor
+        }
+        for accentView in accentContentViews {
+            accentView.tintColor = activeTintColor
         }
     }
 
@@ -180,7 +208,9 @@ final class TabBarSegmentedControl: UISegmentedControl {
     }
 
     private func hideLabelsRecursively(in view: UIView) {
-        if let label = view as? UILabel, label.superview?.tag != Self.injectedViewTag {
+        if let label = view as? UILabel,
+           label.superview?.tag != Self.injectedViewTag,
+           label.superview?.tag != Self.accentViewTag {
             label.isHidden = true
         }
         for subview in view.subviews {
@@ -199,6 +229,138 @@ final class TabBarSegmentedControl: UISegmentedControl {
     private func hideSegmentBackgrounds() {
         for subview in subviews where subview is UIImageView {
             subview.alpha = 0
+        }
+    }
+
+    // MARK: - Indicator Tracking & Accent Masking
+
+    private func startDisplayLink() {
+        guard displayLink == nil else { return }
+        let proxy = DisplayLinkProxy(control: self)
+        displayLinkProxy = proxy
+        displayLink = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.handleDisplayLink))
+        displayLink?.add(to: .main, forMode: .common)
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+        displayLinkProxy = nil
+    }
+
+    /// Finds the glass indicator view within the segmented control's internal hierarchy.
+    ///
+    /// Primary: finds by class name. Fallback: finds the sibling of the segments container
+    /// that has subviews. The indicator has child subviews (glass rendering stack),
+    /// while DestOutView is a leaf.
+    private func findIndicatorView() -> UIView? {
+        // Primary: class name lookup
+        if let found = findDescendant(named: "_UILiquidLensView") {
+            return found
+        }
+
+        // Fallback: find the sibling of the segments container that has subviews.
+        // The indicator, segments container, and DestOutView share a parent wrapper.
+        // The indicator has subviews (glass rendering stack); DestOutView is a leaf.
+        let segments = findSegmentViews()
+        guard let segmentsContainer = segments.first?.superview,
+              let wrapper = segmentsContainer.superview else { return nil }
+
+        return wrapper.subviews.first { sibling in
+            sibling !== segmentsContainer && !sibling.subviews.isEmpty
+        }
+    }
+
+    private func findDescendant(named className: String) -> UIView? {
+        func search(in view: UIView) -> UIView? {
+            for subview in view.subviews {
+                if String(describing: type(of: subview)) == className {
+                    return subview
+                }
+                if let found = search(in: subview) {
+                    return found
+                }
+            }
+            return nil
+        }
+        return search(in: self)
+    }
+
+    /// Returns the indicator rect by tracking the internal glass indicator view's presentation layer,
+    /// or falls back to the selected segment's frame if the indicator view can't be found.
+    private func currentIndicatorRect() -> CGRect {
+        // Try to use the cached/found indicator view for smooth animation tracking
+        if cachedIndicatorView == nil {
+            cachedIndicatorView = findIndicatorView()
+        }
+        if let indicatorView = cachedIndicatorView {
+            // Stay in the presentation layer tree for both sides of the conversion
+            let presLayer = indicatorView.layer.presentation() ?? indicatorView.layer
+            let selfPresLayer = self.layer.presentation() ?? self.layer
+            return selfPresLayer.convert(presLayer.bounds, from: presLayer)
+        }
+
+        // Fallback: use the selected segment's frame (no animation, but always correct)
+        if !didLogFallback {
+            fabBarLogger.warning("Glass indicator view not found — accent masking will snap without animation. Internal UISegmentedControl hierarchy may have changed.")
+            didLogFallback = true
+        }
+        let segments = findSegmentViews()
+        if selectedSegmentIndex >= 0, selectedSegmentIndex < segments.count {
+            return segments[selectedSegmentIndex].frame
+        }
+        return .zero
+    }
+
+    /// Called each frame to update accent view masks based on the glass indicator's animated position.
+    fileprivate func updateAccentMasks() {
+        let indicatorRect = currentIndicatorRect()
+
+        // Pause display link when indicator is stationary to save power
+        if indicatorRect == lastIndicatorRect {
+            stableFrameCount += 1
+            if stableFrameCount >= Self.stableFrameThreshold {
+                displayLink?.isPaused = true
+                return
+            }
+        } else {
+            stableFrameCount = 0
+            lastIndicatorRect = indicatorRect
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
+        for accentView in accentContentViews {
+            updateMask(on: accentView, indicatorRect: indicatorRect)
+        }
+
+        CATransaction.commit()
+    }
+
+    private func updateMask(on accentView: TabItemContentView, indicatorRect: CGRect) {
+        // Use presentation layers for consistency with indicatorRect
+        let accentPres = accentView.layer.presentation() ?? accentView.layer
+        let selfPres = self.layer.presentation() ?? self.layer
+        let accentRectInControl = selfPres.convert(accentPres.bounds, from: accentPres)
+        let intersection = indicatorRect.intersection(accentRectInControl)
+
+        let maskLayer = accentView.layer.mask as? CAShapeLayer ?? {
+            let m = CAShapeLayer()
+            accentView.layer.mask = m
+            return m
+        }()
+
+        if intersection.isNull || intersection.isEmpty {
+            maskLayer.path = UIBezierPath(rect: .zero).cgPath
+        } else {
+            let localRect = CGRect(
+                x: intersection.origin.x - accentRectInControl.origin.x,
+                y: intersection.origin.y - accentRectInControl.origin.y,
+                width: intersection.width,
+                height: intersection.height
+            )
+            maskLayer.path = UIBezierPath(rect: localRect).cgPath
         }
     }
 
@@ -224,12 +386,14 @@ final class TabBarSegmentedControl: UISegmentedControl {
 
         let newIndex = segmentIndex(at: touch.location(in: self))
 
+        displayLink?.isPaused = false
+        stableFrameCount = 0
+
         if shouldMoveIndicatorOnTouchDown {
             originalIndex = selectedSegmentIndex
             selectedSegmentIndex = newIndex
         }
 
-        setHighlightedIndex(newIndex)
         super.touchesBegan(touches, with: event)
     }
 
@@ -245,7 +409,6 @@ final class TabBarSegmentedControl: UISegmentedControl {
             selectedSegmentIndex = newIndex
         }
 
-        setHighlightedIndex(newIndex)
         super.touchesMoved(touches, with: event)
     }
 
@@ -258,7 +421,6 @@ final class TabBarSegmentedControl: UISegmentedControl {
             }
         }
         originalIndex = nil
-        setHighlightedIndex(nil)
         super.touchesEnded(touches, with: event)
     }
 
@@ -267,7 +429,25 @@ final class TabBarSegmentedControl: UISegmentedControl {
             selectedSegmentIndex = originalIndex
         }
         originalIndex = nil
-        setHighlightedIndex(nil)
         super.touchesCancelled(touches, with: event)
+    }
+}
+
+/// Weak-reference proxy that prevents `CADisplayLink` from retaining the segmented control.
+@available(iOS 26.0, *)
+@MainActor
+private final class DisplayLinkProxy: NSObject {
+    weak var control: TabBarSegmentedControl?
+
+    init(control: TabBarSegmentedControl) {
+        self.control = control
+    }
+
+    @objc func handleDisplayLink(_ link: CADisplayLink) {
+        guard let control else {
+            link.invalidate()
+            return
+        }
+        control.updateAccentMasks()
     }
 }
