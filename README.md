@@ -163,8 +163,6 @@ See the [Example project](Example/FabBarExample) for a complete implementation.
 
 ## Known Limitations
 
-**Color clipping during drag:** The native iOS 26 tab bar uses the glass bubble as a real-time clipping mask. Icon and text show the active tint inside the bubble and inactive tint outside, even mid-drag. FabBar highlights tabs fully when the bubble moves over them rather than clipping. Most noticeable during slow drags between tabs.
-
 **Large Content Viewer:** Native tab bars show the [Large Content Viewer](https://developer.apple.com/videos/play/wwdc2019/261/) on long press when using accessibility text sizes. FabBar uses a segmented control internally, which shows a popover instead. Attempts to add Large Content Viewer support were unsuccessful due to inability to disable the default popover.
 
 ![Large Text Mode](Assets/large-text-mode.png)
