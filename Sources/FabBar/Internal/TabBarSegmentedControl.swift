@@ -430,6 +430,9 @@ final class TabBarSegmentedControl: UISegmentedControl {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        displayLink?.isPaused = false
+        stableFrameCount = 0
+
         if shouldMoveIndicatorOnTouchDown, let originalIndex {
             if selectedSegmentIndex != originalIndex {
                 sendActions(for: .valueChanged)
@@ -442,6 +445,9 @@ final class TabBarSegmentedControl: UISegmentedControl {
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        displayLink?.isPaused = false
+        stableFrameCount = 0
+
         if shouldMoveIndicatorOnTouchDown, let originalIndex {
             selectedSegmentIndex = originalIndex
         }
