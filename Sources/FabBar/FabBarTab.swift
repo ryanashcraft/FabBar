@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 /// A tab configuration for FabBar.
 ///
@@ -27,17 +27,26 @@ public struct FabBarTab<Value: Hashable>: Identifiable {
     /// Useful for scroll-to-top or similar behaviors.
     public let onReselect: (() -> Void)?
 
+    /// Whether to show a badge indicator dot on this tab.
+    public let showBadge: Bool
+
+    /// The color of the badge dot. Defaults to the view's tint color.
+    public let badgeColor: UIColor?
+
     /// Creates a tab with an SF Symbol icon.
     ///
     /// - Parameters:
     ///   - value: The tab identifier.
     ///   - title: The title displayed below the icon.
     ///   - systemImage: The SF Symbol name for the icon.
+    ///   - showBadge: Whether to show a badge indicator dot.
     ///   - onReselect: Called when the user taps this tab while it's already selected.
     public init(
         value: Value,
         title: String,
         systemImage: String,
+        showBadge: Bool = false,
+        badgeColor: UIColor? = nil,
         onReselect: (() -> Void)? = nil
     ) {
         self.value = value
@@ -46,6 +55,8 @@ public struct FabBarTab<Value: Hashable>: Identifiable {
         self.image = nil
         self.imageBundle = nil
         self.onReselect = onReselect
+        self.showBadge = showBadge
+        self.badgeColor = badgeColor
     }
 
     /// Creates a tab with a custom image from a bundle.
@@ -55,12 +66,15 @@ public struct FabBarTab<Value: Hashable>: Identifiable {
     ///   - title: The title displayed below the icon.
     ///   - image: The custom image name.
     ///   - imageBundle: The bundle containing the image. Defaults to `.main`.
+    ///   - showBadge: Whether to show a badge indicator dot.
     ///   - onReselect: Called when the user taps this tab while it's already selected.
     public init(
         value: Value,
         title: String,
         image: String,
         imageBundle: Bundle? = nil,
+        showBadge: Bool = false,
+        badgeColor: UIColor? = nil,
         onReselect: (() -> Void)? = nil
     ) {
         self.value = value
@@ -69,5 +83,7 @@ public struct FabBarTab<Value: Hashable>: Identifiable {
         self.image = image
         self.imageBundle = imageBundle ?? .main
         self.onReselect = onReselect
+        self.showBadge = showBadge
+        self.badgeColor = badgeColor
     }
 }

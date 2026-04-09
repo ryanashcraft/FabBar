@@ -29,6 +29,7 @@ final class TabBarSegmentedControl: UISegmentedControl {
     private static let injectedViewTag = 7_777
     /// Tag used to identify accent (active-colored) content views within segments.
     private static let accentViewTag = 7_778
+    private static let badgeDotTag = 7_779
 
     /// Stored tab content views to inject into segments (always inactive color).
     private var contentViews: [TabItemContentView] = []
@@ -85,6 +86,7 @@ final class TabBarSegmentedControl: UISegmentedControl {
         hideDefaultLabels()
         injectContentViewsIfNeeded()
         updateContentViewColors()
+        layoutBadgeDots()
     }
 
     override func didMoveToWindow() {
@@ -103,6 +105,55 @@ final class TabBarSegmentedControl: UISegmentedControl {
     }
 
     // MARK: - Content View Injection
+
+    /// Configures the tab content views to be injected into each segment's view subtree.
+    /// Base views are always inactive-colored; accent views are always active-colored and
+    /// masked to the glass indicator position.
+    /// Updates badge dot visibility for each segment.
+    /// Badge dots are added directly to segment views above both base and accent layers.
+    /// Positioning is handled separately in `layoutBadgeDots()` which runs on every layout pass.
+    func updateBadges(_ badges: [(show: Bool, color: UIColor?)]) {
+        let segmentViews = findSegmentViews()
+        for (index, badge) in badges.enumerated() {
+            guard index < segmentViews.count else { continue }
+            let segmentView = segmentViews[index]
+
+            if badge.show {
+                if let existing = segmentView.viewWithTag(Self.badgeDotTag) {
+                    existing.backgroundColor = badge.color ?? .tintColor
+                } else {
+                    let dotSize = Constants.badgeDotSize
+                    let dot = UIView()
+                    dot.tag = Self.badgeDotTag
+                    dot.backgroundColor = badge.color ?? .tintColor
+                    dot.layer.cornerRadius = dotSize / 2
+                    dot.layer.zPosition = 999
+                    dot.isUserInteractionEnabled = false
+                    segmentView.addSubview(dot)
+                }
+            } else {
+                segmentView.viewWithTag(Self.badgeDotTag)?.removeFromSuperview()
+            }
+        }
+        setNeedsLayout()
+    }
+
+    /// Repositions badge dots relative to their content views.
+    /// Called from `layoutSubviews` so badges stay correct across rotations and resizes.
+    private func layoutBadgeDots() {
+        let dotSize = Constants.badgeDotSize
+        for segmentView in findSegmentViews() {
+            guard let dot = segmentView.viewWithTag(Self.badgeDotTag),
+                  let contentView = segmentView.viewWithTag(Self.injectedViewTag) else { continue }
+            let cvFrame = contentView.frame
+            dot.frame = CGRect(
+                x: cvFrame.maxX - dotSize / 2 + Constants.badgeOffsetX,
+                y: cvFrame.minY + Constants.badgeOffsetY,
+                width: dotSize,
+                height: dotSize
+            )
+        }
+    }
 
     /// Configures the tab content views to be injected into each segment's view subtree.
     /// Base views are always inactive-colored; accent views are always active-colored and
@@ -129,6 +180,8 @@ final class TabBarSegmentedControl: UISegmentedControl {
               segmentViews.count == accentContentViews.count else { return }
 
         for (index, segmentView) in segmentViews.enumerated() {
+            segmentView.clipsToBounds = false
+
             // Base (inactive) content view
             if segmentView.viewWithTag(Self.injectedViewTag) == nil {
                 let contentView = contentViews[index]
