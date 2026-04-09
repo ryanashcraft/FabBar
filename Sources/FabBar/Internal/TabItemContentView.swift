@@ -21,9 +21,7 @@ final class TabItemContentView: UIView {
         self.title = title
         self.symbolName = symbolName
         super.init(frame: .zero)
-        isOpaque = false
-        isUserInteractionEnabled = false
-        contentMode = .redraw
+        commonInit()
     }
 
     init(title: String, imageName: String, imageBundle: Bundle?) {
@@ -31,9 +29,14 @@ final class TabItemContentView: UIView {
         self.customImageName = imageName
         self.customImageBundleIdentifier = imageBundle?.bundleIdentifier ?? ""
         super.init(frame: .zero)
+        commonInit()
+    }
+
+    private func commonInit() {
         isOpaque = false
         isUserInteractionEnabled = false
         contentMode = .redraw
+        clipsToBounds = false
     }
 
     // MARK: - NSCoding
