@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Configuration for the floating action button (FAB) in FabBar.
 ///
@@ -12,6 +13,9 @@ public struct FabBarAction {
     /// The accessibility label for VoiceOver users.
     public let accessibilityLabel: String
 
+    /// The color of the button icon.
+    public let iconColor: Color
+
     /// The action to perform when the button is tapped.
     public let action: () -> Void
 
@@ -20,14 +24,17 @@ public struct FabBarAction {
     /// - Parameters:
     ///   - systemImage: The SF Symbol name for the button icon.
     ///   - accessibilityLabel: The accessibility label for VoiceOver users.
+    ///   - iconColor: The color of the button icon. Defaults to `.white`.
     ///   - action: The action to perform when the button is tapped.
     public init(
         systemImage: String,
         accessibilityLabel: String,
+        iconColor: Color = .white,
         action: @escaping () -> Void
     ) {
         self.systemImage = systemImage
         self.accessibilityLabel = accessibilityLabel
+        self.iconColor = iconColor
         self.action = action
     }
 }
