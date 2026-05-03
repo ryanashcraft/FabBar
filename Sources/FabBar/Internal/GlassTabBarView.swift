@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 
 /// The root UIKit view that assembles the tab bar with glass effects.
@@ -44,7 +45,7 @@ final class GlassTabBarView: UIView {
         let config = UIImage.SymbolConfiguration(pointSize: Constants.fabIconPointSize, weight: .medium)
         let buttonImage = UIImage(systemName: action.systemImage, withConfiguration: config)
         button.setImage(buttonImage, for: .normal)
-        button.tintColor = .white
+        button.tintColor = UIColor(action.iconColor)
         button.accessibilityLabel = action.accessibilityLabel
         button.accessibilityTraits = .button
         fabButton = button
